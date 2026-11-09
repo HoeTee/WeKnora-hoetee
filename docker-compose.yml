@@ -429,7 +429,10 @@ services:
       dockerfile: docker/Dockerfile.sandbox
       target: sandbox
     profiles:
+      # `sandbox` lets `docker compose --profile sandbox pull sandbox` fetch
+      # only this image. `full` still includes it with the rest of that profile.
       - full
+      - sandbox
     command: ["true"]
     restart: "no"
 

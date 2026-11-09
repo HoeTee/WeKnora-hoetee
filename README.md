@@ -97,23 +97,37 @@ Beyond the three modes:
 Requires [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/) and [Git](https://git-scm.com/).
 
 ```bash
-git clone https://github.com/Tencent/WeKnora.git
-cd WeKnora
-cp .env.example .env    # Edit .env as needed, see comments in the file
-docker compose pull     # Pull the latest images
-docker compose up -d    # Start core services
+git clone https://github.com/HoeTee/WeKnora-hoetee.git
+cd WeKnora-hoetee
+cp .env.example .env
+# First boot only. Keep these values for the life of the data volume.
+# SYSTEM_AES_KEY must be 32 bytes (`openssl rand -hex 16`).
+# `openssl rand -hex 32` is 64 characters and disables encryption.
+JWT_SECRET=$(openssl rand -hex 32)
+SYSTEM_AES_KEY=$(openssl rand -hex 16)
+SYSTEM_SIGNING_KEY=$(openssl rand -hex 32)
+sed -i.bak \
+  -e "s/^JWT_SECRET=$/JWT_SECRET=${JWT_SECRET}/" \
+  -e "s/^SYSTEM_AES_KEY=$/SYSTEM_AES_KEY=${SYSTEM_AES_KEY}/" \
+  -e "s/^SYSTEM_SIGNING_KEY=$/SYSTEM_SIGNING_KEY=${SYSTEM_SIGNING_KEY}/" \
+  .env && rm -f .env.bak
+docker compose pull     # Images for WEKNORA_VERSION (default: latest)
+docker compose up -d    # Core services: UI, app, docreader, ParadeDB, Redis
+docker compose ps       # Wait until app and docreader are healthy
 ```
 
-Then open **http://localhost** and follow the onboarding guide. A walkthrough with sample data is in the [Quickstart](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart).
+Then open **http://localhost** (or `http://localhost:${FRONTEND_PORT}` if you changed it) and register. A walkthrough with sample data is in the [Quickstart](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart).
+
+Chat needs a model after signup. Add an OpenAI-compatible endpoint in Settings, or run Ollama on the host (`ollama serve`) at `OLLAMA_BASE_URL` (default `http://host.docker.internal:11434`). No model is included in the images. Ollama is optional: the stack starts without it.
 
 > [!TIP]
-> To use a local Ollama model, run `ollama serve > /dev/null 2>&1 &` first. For the Ollama embedding model name, `OLLAMA_BASE_URL`, and RAM notes, see [Configuration](https://weknora.weixin.qq.com/docs/01-getting-started/04-configuration).
+> If port 80 is already in use, set `FRONTEND_PORT=8088` in `.env` before `docker compose up -d`, then open `http://localhost:8088`. The API stays on `http://localhost:8080` unless you change `APP_PORT`.
 
 | Service | URL |
 |---------|-----|
-| Web UI | `http://localhost` |
+| Web UI | `http://localhost` (host port `FRONTEND_PORT`, default 80) |
 | Backend API | `http://localhost:8080` |
-| Langfuse Tracing | `http://localhost:3000` |
+| Health | `http://localhost:8080/health` |
 
 ### Optional services
 
@@ -125,7 +139,7 @@ Add `--profile` flags to enable additional components; multiple profiles can be 
 | `full` | All features |
 | `neo4j` | Knowledge Graph (Neo4j) |
 | `minio` | Object Storage (MinIO) |
-| `langfuse` | Tracing (Langfuse) |
+| `langfuse` | Tracing UI at `http://localhost:3000` |
 
 ```bash
 docker compose --profile neo4j --profile minio pull
@@ -138,7 +152,7 @@ docker compose down     # Stop services
 If you already have WeKnora running and downloaded a newer release:
 
 ```bash
-# Set WEKNORA_VERSION in .env to the target release (e.g. 0.9.0), or keep latest
+# Set WEKNORA_VERSION in .env to the Docker tag (e.g. v0.9.0, with the leading v), or keep latest
 docker compose pull     # Pull images matching WEKNORA_VERSION
 docker compose up -d    # Recreate containers with new images
 ```

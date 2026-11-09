@@ -50,13 +50,23 @@ Compose 默认 ParadeDB 镜像自 `v0.22.6-pg17` 起 x86 CPU 基线为 `x86-64-v
 最快路径：
 
 ```bash
-git clone https://github.com/Tencent/WeKnora.git && cd WeKnora
-cp .env.example .env              # 编辑必填项：DB_USER/DB_PASSWORD/DB_NAME、REDIS_PASSWORD、JWT_SECRET、SYSTEM_AES_KEY
+git clone https://github.com/HoeTee/WeKnora-hoetee.git && cd WeKnora-hoetee
+cp .env.example .env
+# 首次部署生成并保存。SYSTEM_AES_KEY 必须是 32 字节（openssl rand -hex 16）。
+# openssl rand -hex 32 是 64 个字符，加密会被关闭。
+JWT_SECRET=$(openssl rand -hex 32)
+SYSTEM_AES_KEY=$(openssl rand -hex 16)
+SYSTEM_SIGNING_KEY=$(openssl rand -hex 32)
+sed -i.bak \
+  -e "s/^JWT_SECRET=$/JWT_SECRET=${JWT_SECRET}/" \
+  -e "s/^SYSTEM_AES_KEY=$/SYSTEM_AES_KEY=${SYSTEM_AES_KEY}/" \
+  -e "s/^SYSTEM_SIGNING_KEY=$/SYSTEM_SIGNING_KEY=${SYSTEM_SIGNING_KEY}/" \
+  .env && rm -f .env.bak
 make start-all                # 等价 ./scripts/start_all.sh（默认拉取最新镜像）
 # 或直接：
 docker compose pull           # 拉取与 WEKNORA_VERSION 匹配的镜像
 docker compose up -d
-docker compose ps                 # 等所有服务变成 healthy/running
+docker compose ps                 # 等 app / docreader 变成 healthy
 ```
 
 `.env.example` 中的 `JWT_SECRET`、`SYSTEM_AES_KEY` 默认留空，需要在首次部署时生成一次并妥善保存：`JWT_SECRET` 可用 `openssl rand -hex 32`，`SYSTEM_AES_KEY` 必须是 32 字节，可用 `openssl rand -hex 16`。升级已有部署时请沿用原来的 `SYSTEM_AES_KEY`，否则已加密的凭据无法解密。各密钥的作用见[配置详解](./04-configuration.md)。
@@ -74,7 +84,7 @@ docker compose ps                 # 等所有服务变成 healthy/running
 > 如果数据库仍为 ParadeDB `v0.22.2-pg17`，先按 [ParadeDB 升级说明](06-paradedb-upgrade.md) 停止写入、备份、保留数据卷更换镜像并完成 `pg_search` 扩展升级，再恢复应用。仅替换镜像不会更新已有数据库的扩展 SQL；迁移 `000099` 会处理 WeKnora 库中符合条件的 `0.22.2–0.22.5`，其他数据库仍需单独检查。
 
 ```bash
-# 在 .env 中将 WEKNORA_VERSION 设为目标版本（如 0.9.0），或保持 latest
+# 在 .env 中将 WEKNORA_VERSION 设为 Docker 标签（如 v0.9.0，必须带 v），或保持 latest
 docker compose pull
 docker compose up -d
 ```

@@ -107,23 +107,37 @@ https://github.com/user-attachments/assets/de0e490a-e738-405e-bb3a-64b63edd7278
 [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/), [Git](https://git-scm.com/)이 필요합니다.
 
 ```bash
-git clone https://github.com/Tencent/WeKnora.git
-cd WeKnora
-cp .env.example .env    # 필요에 따라 .env 편집 (파일 내 주석 참고)
-docker compose pull     # 최신 이미지 가져오기
-docker compose up -d    # 코어 서비스 시작
+git clone https://github.com/HoeTee/WeKnora-hoetee.git
+cd WeKnora-hoetee
+cp .env.example .env
+# 최초 한 번만 생성하고 데이터 볼륨과 함께 보관합니다.
+# SYSTEM_AES_KEY 는 32바이트여야 합니다 (openssl rand -hex 16).
+# openssl rand -hex 32 는 64자라서 암호화가 꺼집니다.
+JWT_SECRET=$(openssl rand -hex 32)
+SYSTEM_AES_KEY=$(openssl rand -hex 16)
+SYSTEM_SIGNING_KEY=$(openssl rand -hex 32)
+sed -i.bak \
+  -e "s/^JWT_SECRET=$/JWT_SECRET=${JWT_SECRET}/" \
+  -e "s/^SYSTEM_AES_KEY=$/SYSTEM_AES_KEY=${SYSTEM_AES_KEY}/" \
+  -e "s/^SYSTEM_SIGNING_KEY=$/SYSTEM_SIGNING_KEY=${SYSTEM_SIGNING_KEY}/" \
+  .env && rm -f .env.bak
+docker compose pull     # WEKNORA_VERSION 이미지 (기본 latest)
+docker compose up -d    # UI, app, docreader, ParadeDB, Redis
+docker compose ps       # app 과 docreader 가 healthy 가 될 때까지 대기
 ```
 
-시작 후 **[http://localhost](http://localhost)** 에 접속해 온보딩 가이드에 따라 설정하세요. 샘플 데이터를 사용하는 전체 과정은 [빠른 시작](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart)(중국어)을 참고하세요.
+시작 후 **[http://localhost](http://localhost)** (`FRONTEND_PORT` 를 바꿨다면 `http://localhost:${FRONTEND_PORT}`) 에서 가입합니다. 샘플 데이터 절차는 [빠른 시작](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart)(중국어)을 참고하세요.
+
+대화에는 모델이 필요합니다. 가입 후 설정에서 OpenAI 호환 엔드포인트를 추가하거나, 호스트에서 Ollama(`ollama serve`)를 `OLLAMA_BASE_URL`(기본 `http://host.docker.internal:11434`)로 실행하세요. 이미지에 모델은 없습니다. Ollama 없이도 스택은 뜹니다.
 
 > [!TIP]
-> 로컬 Ollama 모델을 사용하려면 먼저 `ollama serve > /dev/null 2>&1 &` 를 실행하세요. Ollama 임베딩 모델 이름, `OLLAMA_BASE_URL`, RAM 안내는 [설정 문서](https://weknora.weixin.qq.com/docs/01-getting-started/04-configuration)를 참고하세요.
+> 80번 포트가 사용 중이면 `.env`에 `FRONTEND_PORT=8088` 을 넣은 뒤 `docker compose up -d` 하고 `http://localhost:8088` 을 여세요. API는 `APP_PORT` 를 바꾸지 않는 한 `http://localhost:8080` 입니다.
 
 | 서비스 | URL |
 |--------|-----|
-| Web UI | `http://localhost` |
+| Web UI | `http://localhost` (호스트 포트 `FRONTEND_PORT`, 기본 80) |
 | 백엔드 API | `http://localhost:8080` |
-| Langfuse 트레이싱 | `http://localhost:3000` |
+| 헬스 체크 | `http://localhost:8080/health` |
 
 ### 선택 서비스
 
@@ -135,7 +149,7 @@ docker compose up -d    # 코어 서비스 시작
 | `full` | 전체 기능 |
 | `neo4j` | 지식 그래프 (Neo4j) |
 | `minio` | 오브젝트 스토리지 (MinIO) |
-| `langfuse` | 트레이싱 (Langfuse) |
+| `langfuse` | 트레이싱 UI `http://localhost:3000` |
 
 ```bash
 docker compose --profile neo4j --profile minio pull
@@ -148,7 +162,7 @@ docker compose down     # 서비스 중지
 기존 배포가 있고 새 release를 다운로드한 경우:
 
 ```bash
-# .env에서 WEKNORA_VERSION을 대상 버전(예: 0.9.0)으로 설정하거나 latest 유지
+# .env에서 WEKNORA_VERSION을 Docker 태그(예: v0.9.0, 앞의 v 필수)로 설정하거나 latest 유지
 docker compose pull     # WEKNORA_VERSION에 맞는 이미지 가져오기
 docker compose up -d    # 새 이미지로 컨테이너 재생성
 ```

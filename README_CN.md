@@ -97,23 +97,37 @@ https://github.com/user-attachments/assets/de0e490a-e738-405e-bb3a-64b63edd7278
 需要 [Docker](https://www.docker.com/)、[Docker Compose](https://docs.docker.com/compose/) 与 [Git](https://git-scm.com/)。
 
 ```bash
-git clone https://github.com/Tencent/WeKnora.git
-cd WeKnora
-cp .env.example .env    # 按需编辑 .env，详见文件内注释
-docker compose pull     # 拉取最新镜像
-docker compose up -d    # 启动核心服务
+git clone https://github.com/HoeTee/WeKnora-hoetee.git
+cd WeKnora-hoetee
+cp .env.example .env
+# 仅首次部署。这些值要和数据卷一起保留。
+# SYSTEM_AES_KEY 必须是 32 字节（openssl rand -hex 16）。
+# openssl rand -hex 32 是 64 个字符，加密会被关闭。
+JWT_SECRET=$(openssl rand -hex 32)
+SYSTEM_AES_KEY=$(openssl rand -hex 16)
+SYSTEM_SIGNING_KEY=$(openssl rand -hex 32)
+sed -i.bak \
+  -e "s/^JWT_SECRET=$/JWT_SECRET=${JWT_SECRET}/" \
+  -e "s/^SYSTEM_AES_KEY=$/SYSTEM_AES_KEY=${SYSTEM_AES_KEY}/" \
+  -e "s/^SYSTEM_SIGNING_KEY=$/SYSTEM_SIGNING_KEY=${SYSTEM_SIGNING_KEY}/" \
+  .env && rm -f .env.bak
+docker compose pull     # 拉取 WEKNORA_VERSION 对应镜像（默认 latest）
+docker compose up -d    # 核心服务：UI、app、docreader、ParadeDB、Redis
+docker compose ps       # 等到 app 与 docreader 变为 healthy
 ```
 
-启动成功后访问 **[http://localhost](http://localhost)**，按新手引导完成配置即可使用。带样例数据的完整上手流程见[快速上手](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart)。
+启动成功后访问 **[http://localhost](http://localhost)**（改过 `FRONTEND_PORT` 时用 `http://localhost:${FRONTEND_PORT}`），注册账号即可。带样例数据的完整上手流程见[快速上手](https://weknora.weixin.qq.com/docs/01-getting-started/03-quickstart)。
+
+对话需要模型。注册后在设置里添加 OpenAI 兼容接口，或在宿主机运行 Ollama（`ollama serve`），地址为 `OLLAMA_BASE_URL`（默认 `http://host.docker.internal:11434`）。镜像不包含模型。不启动 Ollama 也可以把服务跑起来。
 
 > [!TIP]
-> 如需使用本地 Ollama 模型，请先运行 `ollama serve > /dev/null 2>&1 &`。Ollama 向量模型名、`OLLAMA_BASE_URL` 与内存说明见[配置文档](https://weknora.weixin.qq.com/docs/01-getting-started/04-configuration)。
+> 80 端口被占用时，先在 `.env` 里设置 `FRONTEND_PORT=8088`，再执行 `docker compose up -d`，然后打开 `http://localhost:8088`。API 仍在 `http://localhost:8080`，除非修改 `APP_PORT`。
 
 | 服务 | 地址 |
 |------|------|
-| Web UI | `http://localhost` |
+| Web UI | `http://localhost`（宿主机端口 `FRONTEND_PORT`，默认 80） |
 | 后端 API | `http://localhost:8080` |
-| 链路追踪 (Langfuse) | `http://localhost:3000` |
+| 健康检查 | `http://localhost:8080/health` |
 
 ### 可选服务
 
@@ -125,7 +139,7 @@ docker compose up -d    # 启动核心服务
 | `full` | 全部功能 |
 | `neo4j` | 知识图谱 (Neo4j) |
 | `minio` | 对象存储 (MinIO) |
-| `langfuse` | 链路追踪 (Langfuse) |
+| `langfuse` | 链路追踪界面 `http://localhost:3000` |
 
 ```bash
 docker compose --profile neo4j --profile minio pull
@@ -138,7 +152,7 @@ docker compose down     # 停止服务
 若已有部署并下载了更新的 release：
 
 ```bash
-# 在 .env 中将 WEKNORA_VERSION 设为目标版本（如 0.9.0），或保持 latest
+# 在 .env 中将 WEKNORA_VERSION 设为 Docker 标签（如 v0.9.0，必须带 v），或保持 latest
 docker compose pull     # 拉取与 WEKNORA_VERSION 匹配的镜像
 docker compose up -d    # 用新镜像重建容器
 ```
